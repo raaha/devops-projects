@@ -1,0 +1,69 @@
+---
+- name: Install consul server
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Ensure APT is updated
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Install dependencies
+      ansible.builtin.apt:
+        name:
+          - wget
+          - gpg
+        state: present
+
+    - name: Download HashiCorp GPG key
+      ansible.builtin.get_url:
+        url: https://apt.releases.hashicorp.com/gpg
+        dest: /tmp/hashicorp.gpg
+        mode: "0644"
+        force: false  # Prevents re-downloading if the file already exists
+
+    - name: Add HashiCorp GPG key to keyring
+      ansible.builtin.command:
+        cmd: gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg /tmp/hashicorp.gpg
+      args:
+        creates: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+    - name: Add HashiCorp repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+              https://apt.releases.hashicorp.com \
+              {{ ansible_distribution_release | lower }} main"
+        state: present
+        filename: hashicorp
+
+    - name: Update APT cache
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Install Consul
+      ansible.builtin.apt:
+        name: consul
+        state: present
+
+    - name: Copy Consul server settings
+      ansible.builtin.template:
+        src: templates/consul-server.hcl.j2
+        dest: /etc/consul.d/consul.hcl
+        mode: '0644'
+      vars:
+        datacenter: dc1
+        data_dir: /opt/consul
+        client_addr: 0.0.0.0
+        ui: "true"
+        server: "true"
+        bind_addr: 192.168.33.10
+        bootstrap_expect: 1
+        encrypt: "/Ryxixfgry4++HPab6Zq9I3jakehUwN9CeJqgHCj1+Y="
+
+    - name: Enable and start Consul service
+      ansible.builtin.systemd:
+        name: consul
+        enabled: true
+        state: started
+        no_block: true

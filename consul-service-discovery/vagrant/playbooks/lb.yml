@@ -1,0 +1,72 @@
+---
+- name: Install consul-template and nginx load balancer
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Ensure APT is updated
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Install dependencies, and nginx
+      ansible.builtin.apt:
+        name:
+          - unzip
+          - wget
+          - gpg
+          - nginx
+        state: present
+
+    - name: Copy the load balancer settings
+      ansible.builtin.copy:
+        src: templates/load-balancer.conf.ctmpl
+        dest: /etc/nginx/conf.d/load-balancer.conf.ctmpl
+        mode: "0644"
+
+    - name: Delete the nginx default file
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Restart nginx
+      ansible.builtin.systemd:
+        name: nginx
+        enabled: true
+        state: reloaded
+
+    - name: Download consul template
+      ansible.builtin.get_url:
+        url: https://releases.hashicorp.com/consul-template/0.39.1/consul-template_0.39.1_linux_amd64.zip
+        dest: /opt/consul-template.zip
+        mode: "0644"
+
+    - name: Install consul template
+      ansible.builtin.unarchive:
+        src: /opt/consul-template.zip
+        dest: /usr/local/bin/
+        remote_src: true
+
+    - name: Copy consul template
+      ansible.builtin.template:
+        src: templates/consul-template.hcl.j2
+        dest: /etc/nginx/conf.d/consul-template.hcl
+        mode: "0644"
+      vars:
+        address: 192.168.33.10
+
+    - name: Create consult template systemd service unit
+      ansible.builtin.template:
+        src: templates/consul-template.service.j2
+        dest: /etc/systemd/system/consul-template.service
+        mode: "0644"
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Enable and start Consul service
+      ansible.builtin.systemd:
+        name: consul-template
+        enabled: true
+        state: started

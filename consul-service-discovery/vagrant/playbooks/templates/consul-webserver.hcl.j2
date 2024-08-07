@@ -1,0 +1,8 @@
+"service" = {
+  "Name" = "{{ consul_name }}"
+  "Port" = {{ consul_port }}
+  "check" = {
+    "args" = ["{{ check_args_method }}", "{{ check_args_addr }}"]
+    "interval" = "{{ check_interval }}"
+  }
+}
